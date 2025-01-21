@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=no" />
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" type="text/css">
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+    <style>
+        body {
+            margin: 10px;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Ensure the viewer box has visible borders and add bottom margin */
+        #forgeViewer {
+            width: 90%;
+            height: 500px;
+            margin: 0 auto;
+            background-color: #F0F8FF;
+            border: 2px solid #ccc;
+            display: block;
+            margin-bottom: 20px; /* Add margin to create space below the viewer */
+        }
+
+        /* Style for the properties box with added top margin */
+        #infoPanel {
+            margin: 20px auto;
+            padding: 10px;
+            width: 90%;
+            background-color: #ffffff;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            color: #333;
+            line-height: 1.5;
+            white-space: pre-wrap; /* Ensure long text wraps inside the box */
+            margin-top: 20px; /* Add margin to create space above the properties box */
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 80%;
+            margin: 5px 0;
+        }
+
+        input[type="button"] {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        input[type="button"]:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Autodesk Viewer - Fetch Properties of Clicked Element</h1>
+    <form id="frm1">
+        Access Token:
+        <br>
+        <textarea id="access_token" rows="6" cols="50">Inser Token Here</textarea>
+        <br><br>
+        Source File URN (encoded):
+        <br>
+        <textarea id="source_file_urn" rows="2" cols="50">Insert Base64 Here</textarea>
+        <br><br>
+        <input type="button" onclick="initializeViewer()" value="Submit">
+    </form>
+
+    <div id="forgeViewer"></div>
+    <div id="infoPanel">Click on an element to see its properties here.</div>
+
+    <script>
+        var viewer;
+
+        function initializeViewer() {
+            const options = {
+                env: 'AutodeskProduction2',
+                api: 'streamingV2',
+                getAccessToken: function (onTokenReady) {
+                    const token = document.getElementById("access_token").value;
+                    const timeInSeconds = 3600;
+                    onTokenReady(token, timeInSeconds);
+                }
+            };
+
+            Autodesk.Viewing.Initializer(options, function () {
+                const htmlDiv = document.getElementById('forgeViewer');
+                viewer = new Autodesk.Viewing.GuiViewer3D(htmlDiv);
+                const startedCode = viewer.start();
+
+                if (startedCode > 0) {
+                    console.error('Failed to initialize viewer.');
+                    return;
+                }
+
+                console.log('Viewer initialized.');
+
+                const urn = 'urn:' + document.getElementById("source_file_urn").value;
+                Autodesk.Viewing.Document.load(urn, onDocumentLoadSuccess, onDocumentLoadFailure);
+            });
+        }
+
+        function onDocumentLoadSuccess(doc) {
+            const viewables = doc.getRoot().search({ type: 'geometry' });
+
+            if (viewables.length === 0) {
+                console.error('No viewables found in the document.');
+                return;
+            }
+
+            viewer.loadDocumentNode(doc, viewables[0]);
+            viewer.addEventListener(Autodesk.Viewing.SELECTION_CHANGED_EVENT, onElementSelected);
+        }
+
+        function onDocumentLoadFailure() {
+            console.error('Failed to load document.');
+        }
+
+        function onElementSelected(event) {
+            const dbIds = event.dbIdArray;
+
+            if (dbIds.length === 0) {
+                document.getElementById('infoPanel').innerHTML = 'No element selected.';
+                return;
+            }
+
+            const dbId = dbIds[0];
+
+            viewer.getProperties(dbId, function (props) {
+                const infoPanel = document.getElementById('infoPanel');
+                let propertyDetails = `<strong>Element Properties:</strong><br>`;
+                propertyDetails += `ID: ${props.dbId}<br>`;
+                propertyDetails += `Name: ${props.name}<br>`;
+                propertyDetails += `Properties:<br>`;
+
+                props.properties.forEach(prop => {
+                    propertyDetails += `&nbsp;&nbsp;- ${prop.displayName}: ${prop.displayValue}<br>`;
+                });
+
+                infoPanel.innerHTML = propertyDetails;
+            }, function (error) {
+                console.error('Failed to fetch properties:', error);
+                document.getElementById('infoPanel').innerHTML = 'Failed to fetch element properties.';
+            });
+        }
+    </script>
+</body>
+
+</html>
